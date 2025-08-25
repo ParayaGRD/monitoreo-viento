@@ -21,7 +21,7 @@ jobs:
         run: |
           pip install requests beautifulsoup4
 
-      - name: Ejecutar script 330021.py
+      - name: Ejecutar script 330021.py #espero ahora funcione
         env:
           CORREO_ORIGEN: ${{ secrets.CORREO_ORIGEN }}
           CONTRASENA: ${{ secrets.CONTRASENA }}
