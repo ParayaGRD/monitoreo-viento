@@ -6,7 +6,7 @@ on:
   workflow_dispatch:        # Permite lanzarlo manualmente también
 
 jobs:
-  run-script:
+  run-scripts:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repositorio
@@ -21,9 +21,21 @@ jobs:
         run: |
           pip install requests beautifulsoup4
 
-      - name: Ejecutar script
+      - name: Ejecutar script 330021.py
         env:
           CORREO_ORIGEN: ${{ secrets.CORREO_ORIGEN }}
           CONTRASENA: ${{ secrets.CONTRASENA }}
           DESTINATARIO: ${{ secrets.DESTINATARIO }}
-        run: python monitoreo.py
+        run: |
+          echo "🚀 Ejecutando 330021.py..."
+          python 330021.py
+
+      - name: Ejecutar script 330114.py
+        env:
+          CORREO_ORIGEN: ${{ secrets.CORREO_ORIGEN }}
+          CONTRASENA: ${{ secrets.CONTRASENA }}
+          DESTINATARIO: ${{ secrets.DESTINATARIO }}
+        run: |
+          echo "🚀 Ejecutando 330114.py..."
+          python 330114.py
+
