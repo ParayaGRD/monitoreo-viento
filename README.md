@@ -25,7 +25,7 @@ En tu repositorio:
 |-----------------|------------------------------------|
 | `CORREO_ORIGEN` | tu correo de Gmail (ej. monitoreo.grdpudahuel@gmail.com) |
 | `CONTRASENA`    | contraseña o App Password de Gmail |
-| `DESTINATARIO`  | correo que recibirá las alertas (ej. paraya@mpudahuel.cl) |
+| `DESTINATARIO`  | correo que recibirá las alertas (ej. correo@mpudahuel.cl) |
 
 > **Nota:** Se recomienda usar **App Passwords de Gmail** en lugar de tu contraseña normal.
 
