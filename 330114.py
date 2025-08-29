@@ -13,34 +13,35 @@ URL = "https://climatologia.meteochile.gob.cl/application/diariob/visorDeDatosEm
 # Límite de velocidad del viento (en kt) para generar la alarma
 LIMITE_VELOCIDAD = 25
 
-# Variables de entorno (cargadas desde GitHub Secrets)
+# Credenciales desde GitHub Secrets
 CORREO_ORIGEN = os.environ["CORREO_ORIGEN"]
 CONTRASENA = os.environ["CONTRASENA"]
-DESTINATARIO = os.environ["DESTINATARIO"]
+
+def obtener_destinatarios():
+    raw = os.environ.get("DESTINATARIOS") or os.environ.get("DESTINATARIO")
+    if not raw:
+        raise RuntimeError("No se encontró la variable DESTINATARIOS ni DESTINATARIO en el entorno")
+    parts = [p.strip() for p in raw.replace(";", ",").split(",") if p.strip()]
+    if not parts:
+        raise RuntimeError("No hay destinatarios válidos en DESTINATARIOS/DESTINATARIO")
+    return parts
+
+DESTINATARIOS = obtener_destinatarios()
 
 def obtener_velocidad_viento():
-    """
-    Extrae la velocidad del viento desde la página.
-    Trata de manejar valores con espacios u otros caracteres.
-    """
     try:
         response = requests.get(URL, timeout=10)
         response.raise_for_status()
-
         soup = BeautifulSoup(response.text, 'html.parser')
         celdas = soup.find_all("td", class_="text-center")
-
         for celda in celdas:
             texto = celda.text.strip()
-            if "/" in texto:  # Formato dirección/velocidad
+            if "/" in texto:
                 partes = texto.split("/")
                 velocidad_raw = partes[-1].strip()
-                # Extraer el primer entero que aparezca
                 m = re.search(r"(\d+)", velocidad_raw)
                 if m:
-                    velocidad = int(m.group(1))
-                    return velocidad
-
+                    return int(m.group(1))
         return None
     except Exception as e:
         print(f"Error al obtener datos: {e}")
@@ -48,17 +49,12 @@ def obtener_velocidad_viento():
         return None
 
 def enviar_correo(subject: str, body: str, important: bool = False):
-    """
-    Envía un correo. Si important=True agrega cabeceras que indican alta prioridad.
-    Nota: SMTP no puede forzar etiquetas internas de Gmail; esto solo añade cabeceras de prioridad.
-    """
     try:
         mensaje = MIMEMultipart()
         mensaje["From"] = CORREO_ORIGEN
-        mensaje["To"] = DESTINATARIO
+        mensaje["To"] = ", ".join(DESTINATARIOS)
         mensaje["Subject"] = subject
 
-        # Cabeceras que suelen usarse para indicar prioridad
         if important:
             mensaje["Importance"] = "High"
             mensaje["X-Priority"] = "1 (Highest)"
@@ -70,10 +66,10 @@ def enviar_correo(subject: str, body: str, important: bool = False):
         servidor = smtplib.SMTP("smtp.gmail.com", 587)
         servidor.starttls()
         servidor.login(CORREO_ORIGEN, CONTRASENA)
-        servidor.sendmail(CORREO_ORIGEN, DESTINATARIO, mensaje.as_string())
+        servidor.sendmail(CORREO_ORIGEN, DESTINATARIOS, mensaje.as_string())
         servidor.quit()
 
-        print(f"✅ Correo enviado a {DESTINATARIO} — Asunto: {subject}")
+        print(f"✅ Correo enviado a: {', '.join(DESTINATARIOS)} — Asunto: {subject}")
     except Exception as e:
         print(f"❌ Error al enviar correo: {e}")
         print(traceback.format_exc())
@@ -85,17 +81,15 @@ if __name__ == "__main__":
     if velocidad is not None:
         print(f"Velocidad actual del viento: {velocidad} kt")
 
-        # 1) Enviar siempre el informe de medición
         asunto_informe = f"Informe: Velocidad del viento San Pablo DASA (330114) - {velocidad} kt"
         cuerpo_informe = (
-            f"Informe automático de velocidad del viento (estación 330114 - San Pablo DASA):\n\n"
+            f"Informe automático (estación 330114 - San Pablo DASA):\n\n"
             f"Velocidad actual: {velocidad} kt\n"
             f"Límite configurado: {LIMITE_VELOCIDAD} kt\n\n"
             f"Este correo es un registro periódico generado por el sistema de monitoreo."
         )
         enviar_correo(asunto_informe, cuerpo_informe, important=False)
 
-        # 2) Si excede el límite, enviar además una alerta marcada como importante
         if velocidad > LIMITE_VELOCIDAD:
             asunto_alerta = "ALERTA IMPORTANTE: Velocidad de viento SUPERADA - San Pablo DASA (330114)"
             cuerpo_alerta = (
@@ -108,5 +102,3 @@ if __name__ == "__main__":
             print("Todo en orden ✅ (no supera el límite)")
     else:
         print("No se pudo obtener la velocidad del viento ❌")
-        # Opcional: enviar correo de error si quieres
-        # enviar_correo("Error: No se pudieron obtener datos de viento (330114)", "Revisar proceso de scraping o la URL.", important=True)
