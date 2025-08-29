@@ -25,7 +25,7 @@ jobs:
         env:
           CORREO_ORIGEN: ${{ secrets.CORREO_ORIGEN }}
           CONTRASENA: ${{ secrets.CONTRASENA }}
-          DESTINATARIO: ${{ secrets.DESTINATARIO }}
+          DESTINATARIOS: ${{ secrets.DESTINATARIOS }}
         run: |
           echo "🚀 Ejecutando 330021.py..."
           python 330021.py
@@ -34,7 +34,7 @@ jobs:
         env:
           CORREO_ORIGEN: ${{ secrets.CORREO_ORIGEN }}
           CONTRASENA: ${{ secrets.CONTRASENA }}
-          DESTINATARIO: ${{ secrets.DESTINATARIO }}
+          DESTINATARIOS: ${{ secrets.DESTINATARIOS }}
         run: |
           echo "🚀 Ejecutando 330114.py..."
           python 330114.py
