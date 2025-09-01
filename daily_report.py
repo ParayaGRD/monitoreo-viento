@@ -77,12 +77,6 @@ def enviar_correo(subject, body):
 if __name__ == "__main__":
     now = datetime.now(TZ)
 
-    # Seguridad: solo enviar si la hora local está en el rango 08:00-09:00
-    # (con el cron 12:00 UTC esto corresponderá normalmente a 08:00 o 09:00 según DST)
-    if now.hour not in (8, 9):
-        print(f"No es la ventana horaria objetivo (08:00-09:00). Hora local actual: {now.strftime('%Y-%m-%d %H:%M %Z')}. Saliendo sin enviar.")
-        exit(0)
-
     # Generar informe del día anterior (fecha local)
     report_date = (now - timedelta(days=1)).date()
     body = f"Informe diario para la fecha {report_date.isoformat()} (horas locales, America/Santiago)\n\n"
