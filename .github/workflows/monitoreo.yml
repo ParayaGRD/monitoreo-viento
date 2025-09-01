@@ -47,8 +47,8 @@ jobs:
           echo "Contenido de data/:"
           ls -la data || echo "No existe carpeta data"
           echo "Muestras de CSVs (si existen):"
-          [ -f data/330021.csv ] && tail -n 5 data/330021.csv || echo "330021.csv no existe"
-          [ -f data/330114.csv ] && tail -n 5 data/330114.csv || echo "330114.csv no existe"
+          if [ -f data/330021.csv ]; then tail -n 5 data/330021.csv; else echo "330021.csv no existe"; fi
+          if [ -f data/330114.csv ]; then tail -n 5 data/330114.csv; else echo "330114.csv no existe"; fi
 
       - name: Commit data CSVs
         env:
@@ -62,11 +62,11 @@ jobs:
           git add data/330021.csv || true
           git add data/330114.csv || true
 
-          # Commit si hay cambios
-          if git diff --staged --quiet; then
+          # Si hay cambios staged, hace commit y push
+          if git diff --cached --quiet; then
             echo "No hay cambios en CSVs; no se hace commit."
           else
             git commit -m "Automated: add/update measurement CSVs"
-            # Push usando GITHUB_TOKEN
-            git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:main
+            # Push usando GITHUB_TOKEN disponible en la variable de entorno
+            git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}" HEAD:main
           fi
