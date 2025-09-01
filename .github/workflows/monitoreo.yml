@@ -38,4 +38,15 @@ jobs:
         run: |
           echo "🚀 Ejecutando 330114.py..."
           python 330114.py
-
+# --- Commit de los CSVs al repo (usa GITHUB_TOKEN) ---
+- name: Commit data CSVs
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  run: |
+    git config user.name "github-actions[bot]"
+    git config user.email "github-actions[bot]@users.noreply.github.com"
+    git add data/330021.csv || true
+    git add data/330114.csv || true
+    git commit -m "Add measurements (automated)" || echo "No changes to commit"
+    # push usando token (reemplaza el repositorio automáticamente)
+    git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:main
