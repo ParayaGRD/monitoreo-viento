@@ -2,12 +2,14 @@ name: Informe diario de viento
 
 on:
   schedule:
-    - cron: "0 12 * * *"   # 12:00 UTC -> 08:00 CLT (UTC-4) / 09:00 CLT (UTC-3)
-  workflow_dispatch:
+    # Todos los días a las 11:00 UTC (~08:00 Chile)
+    - cron: "0 11 * * *"
+  workflow_dispatch: # Permite ejecutarlo manualmente desde Actions
 
 jobs:
   report:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
@@ -19,12 +21,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pandas
+          python -m pip install --upgrade pip
+          pip install pandas pytz
 
       - name: Ejecutar daily_report
         env:
           CORREO_ORIGEN: ${{ secrets.CORREO_ORIGEN }}
           CONTRASENA: ${{ secrets.CONTRASENA }}
-          DESTINATARIOS: ${{ secrets.DESTINATARIOS }}
-        run: |
-          python daily_report.py
+          DESTINATARIO: ${{ secrets.DESTINATARIO }}
+        run: python daily_report.py
