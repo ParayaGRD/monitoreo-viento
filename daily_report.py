@@ -1,86 +1,90 @@
-# daily_report.py
-import os
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 import pandas as pd
+import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta
 
-# Config
+# Variables de entorno (GitHub Secrets)
 CORREO_ORIGEN = os.environ["CORREO_ORIGEN"]
 CONTRASENA = os.environ["CONTRASENA"]
+DESTINATARIOS = os.environ["DESTINATARIOS"].split(",")
 
-def obtener_destinatarios():
-    raw = os.environ.get("DESTINATARIOS") or os.environ.get("DESTINATARIO")
-    if not raw:
-        raise RuntimeError("No se encontró DESTINATARIOS ni DESTINATARIO")
-    return [p.strip() for p in raw.replace(";", ",").split(",") if p.strip()]
+# Directorio donde se guardan los CSV
+DATA_DIR = "data"
 
-DESTINATARIOS = obtener_destinatarios()
-TZ = ZoneInfo("America/Santiago")
-
-def read_station_csv(station_id):
-    path = f"data/{station_id}.csv"
-    if not os.path.exists(path):
-        return None
-    df = pd.read_csv(path, parse_dates=["timestamp"])
-    # Asegurar tz-aware: si no tiene tz, consideramos que está en UTC y lo convertimos a TZ local
-    if df["timestamp"].dt.tz is None:
-        df["timestamp"] = df["timestamp"].dt.tz_localize("UTC").dt.tz_convert(TZ)
-    else:
-        df["timestamp"] = df["timestamp"].dt.tz_convert(TZ)
-    df = df.set_index("timestamp").sort_index()
+# Función para leer y preparar CSV
+def read_station_csv(path):
+    df = pd.read_csv(path)
+    if "timestamp" in df.columns:
+        # Convertir a datetime
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+        # Localizar timezone si no lo tiene
+        if df["timestamp"].dt.tz is None:
+            df["timestamp"] = df["timestamp"].dt.tz_localize("America/Santiago")
     return df
 
-def hourly_stats_for_date(df, date_local):
-    start = datetime(date_local.year, date_local.month, date_local.day, tzinfo=TZ)
-    end = start + timedelta(days=1)
-    df_day = df.loc[(df.index >= start) & (df.index < end)]
-    if df_day.empty:
-        return None
-    hourly = df_day["wind_kt"].resample("H").agg(["min", "max", "mean"])
-    hourly["mean_ma3"] = hourly["mean"].rolling(window=3, min_periods=1).mean()
-    return hourly
+# Función para generar el informe diario
+def build_report_for_date(report_date):
+    report_lines = []
+    estaciones = {
+        "330021": "Pudahuel AMB",
+        "330114": "San Pablo DASA"
+    }
 
-def build_report_for_date(date_local):
-    stations = ["330021", "330114"]
-    parts = []
-    for s in stations:
-        df = read_station_csv(s)
-        parts.append(f"--- Estación {s} ---")
-        if df is None:
-            parts.append("No hay datos (archivo faltante).")
+    for code, name in estaciones.items():
+        file_path = os.path.join(DATA_DIR, f"{code}.csv")
+        if not os.path.exists(file_path):
+            report_lines.append(f"⚠️ No hay datos para la estación {name} ({code})\n")
             continue
-        stats = hourly_stats_for_date(df, date_local)
-        if stats is None:
-            parts.append("No se encontraron registros para la fecha.")
+
+        df = read_station_csv(file_path)
+
+        # Filtrar datos del día solicitado
+        df_day = df[df["timestamp"].dt.date == report_date.date()]
+
+        if df_day.empty:
+            report_lines.append(f"⚠️ Sin registros para {name} ({code}) en {report_date.date()}\n")
             continue
-        parts.append("Hora (local) | min(kt) | max(kt) | mean(kt) | mean_MA3(kt)")
-        for idx, row in stats.iterrows():
-            hour_label = idx.strftime("%Y-%m-%d %H:%M")
-            parts.append(f"{hour_label} | {row['min']:.1f} | {row['max']:.1f} | {row['mean']:.2f} | {row['mean_ma3']:.2f}")
-    return "\n".join(parts)
 
-def enviar_correo(subject, body):
-    msg = MIMEMultipart()
-    msg["From"] = CORREO_ORIGEN
-    msg["To"] = ", ".join(DESTINATARIOS)
-    msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain"))
-    s = smtplib.SMTP("smtp.gmail.com", 587)
-    s.starttls()
-    s.login(CORREO_ORIGEN, CONTRASENA)
-    s.sendmail(CORREO_ORIGEN, DESTINATARIOS, msg.as_string())
-    s.quit()
+        # Agrupar por hora y calcular estadísticas
+        df_day["hour"] = df_day["timestamp"].dt.hour
+        stats = df_day.groupby("hour")["velocidad"].agg(["min", "max", "mean"])
 
+        report_lines.append(f"📊 Informe {name} ({code}) - {report_date.date()}")
+        report_lines.append(stats.to_string())
+        report_lines.append("")
+
+    return "\n".join(report_lines)
+
+# Función para enviar correo
+def enviar_informe_por_correo(asunto, cuerpo):
+    try:
+        mensaje = MIMEMultipart()
+        mensaje["From"] = CORREO_ORIGEN
+        mensaje["To"] = ", ".join(DESTINATARIOS)
+        mensaje["Subject"] = asunto
+        mensaje.attach(MIMEText(cuerpo, "plain"))
+
+        servidor = smtplib.SMTP("smtp.gmail.com", 587)
+        servidor.starttls()
+        servidor.login(CORREO_ORIGEN, CONTRASENA)
+        servidor.sendmail(CORREO_ORIGEN, DESTINATARIOS, mensaje.as_string())
+        servidor.quit()
+
+        print(f"✅ Informe enviado a {', '.join(DESTINATARIOS)}")
+    except Exception as e:
+        print(f"❌ Error al enviar informe: {e}")
+
+# Ejecución principal
 if __name__ == "__main__":
-    now = datetime.now(TZ)
+    report_date = datetime.now() - timedelta(days=1)  # Informe del día anterior
+    body = build_report_for_date(report_date)
 
-    # Generar informe del día anterior (fecha local)
-    report_date = (now - timedelta(days=1)).date()
-    body = f"Informe diario para la fecha {report_date.isoformat()} (horas locales, America/Santiago)\n\n"
-    body += build_report_for_date(report_date)
-    subject = f"Informe diario de viento - {report_date.isoformat()}"
-    enviar_correo(subject, body)
-    print("✅ Informe diario enviado.")
+    if body.strip():
+        enviar_informe_por_correo(
+            f"📌 Informe diario de viento - {report_date.date()}",
+            body
+        )
+    else:
+        print("⚠️ No se generó contenido para el informe.")
