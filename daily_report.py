@@ -1,23 +1,20 @@
 import os
-import pandas as pd
-from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta
+import pandas as pd
 
-# -----------------------------
+# =========================
 # Configuración de correo
-# -----------------------------
+# =========================
 CORREO_ORIGEN = os.environ["CORREO_ORIGEN"]
 CONTRASENA = os.environ["CONTRASENA"]
 DESTINATARIO = os.environ["DESTINATARIO"]
 
-# Carpeta donde se guardan los datos
-DATA_FOLDER = "data"
+# =========================
+# Funciones auxiliares
+# =========================
 
-# -----------------------------
-# Función: Leer CSV y normalizar
-# -----------------------------
 def read_station_csv(file_path):
     df = pd.read_csv(file_path)
 
@@ -41,76 +38,68 @@ def read_station_csv(file_path):
     # Renombrar a wind_speed para trabajar uniforme
     df.rename(columns={wind_col: "wind_speed"}, inplace=True)
 
-    # Convertir timestamp a datetime
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    # Convertir timestamp a datetime con UTC
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
 
     # Filtrar filas válidas
     df = df.dropna(subset=["timestamp", "wind_speed"])
 
     return df
 
-# -----------------------------
-# Función: Generar reporte diario
-# -----------------------------
+
 def build_report_for_date(date):
-    report_lines = [f"📊 Informe diario de viento ({date.date()})\n"]
+    files = ["330021.csv", "330114.csv"]
+    report_lines = []
+    date_str = date.strftime("%Y-%m-%d")
 
-    for station_file in os.listdir(DATA_FOLDER):
-        if not station_file.endswith(".csv"):
+    for file in files:
+        if not os.path.exists(file):
+            report_lines.append(f"⚠️ No se encontró el archivo {file}")
             continue
 
-        station_id = station_file.replace(".csv", "")
-        file_path = os.path.join(DATA_FOLDER, station_file)
+        df = read_station_csv(file)
 
-        df = read_station_csv(file_path)
-
-        # Filtrar por la fecha indicada
+        # Filtrar solo filas del día solicitado
         df_day = df[df["timestamp"].dt.date == date.date()]
+
         if df_day.empty:
-            report_lines.append(f"\n🌐 Estación {station_id}: Sin datos para este día.")
+            report_lines.append(f"📭 {file}: No hay datos para {date_str}")
             continue
 
-        # Cálculos básicos
         max_wind = df_day["wind_speed"].max()
-        min_wind = df_day["wind_speed"].min()
-        avg_wind = df_day["wind_speed"].mean()
+        mean_wind = df_day["wind_speed"].mean()
 
-        # Promedios horarios
-        hourly_avg = df_day.groupby(df_day["timestamp"].dt.hour)["wind_speed"].mean()
-
-        report_lines.append(f"\n🌐 Estación {station_id}:")
-        report_lines.append(f"   ➡️ Velocidad máxima: {max_wind:.2f} kt")
-        report_lines.append(f"   ➡️ Velocidad mínima: {min_wind:.2f} kt")
-        report_lines.append(f"   ➡️ Velocidad promedio: {avg_wind:.2f} kt")
-        report_lines.append("   ⏰ Promedios por hora:")
-        for hour, value in hourly_avg.items():
-            report_lines.append(f"      - {hour:02d}:00 → {value:.2f} kt")
+        report_lines.append(
+            f"📊 {file} - {date_str}\n"
+            f"• Velocidad máxima: {max_wind:.1f} kt\n"
+            f"• Velocidad promedio: {mean_wind:.1f} kt\n"
+        )
 
     return "\n".join(report_lines)
 
-# -----------------------------
-# Función: Enviar correo
-# -----------------------------
+
 def send_email(subject, body):
-    msg = MIMEMultipart()
+    msg = MIMEText(body, "plain")
     msg["From"] = CORREO_ORIGEN
     msg["To"] = DESTINATARIO
     msg["Subject"] = subject
 
-    msg.attach(MIMEText(body, "plain"))
-
-    with smtplib.SMTP("smtp.gmail.com", 587) as server:
-        server.starttls()
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(CORREO_ORIGEN, CONTRASENA)
-        server.send_message(msg)
+        server.sendmail(CORREO_ORIGEN, DESTINATARIO, msg.as_string())
 
-# -----------------------------
-# Main
-# -----------------------------
+
+# =========================
+# Script principal
+# =========================
 if __name__ == "__main__":
-    report_date = datetime.now() - timedelta(days=1)  # Informe del día anterior
-    body = build_report_for_date(report_date)
-    subject = f"📩 Informe diario de viento - {report_date.date()}"
+    # Reporte del día anterior
+    report_date = datetime.now() - timedelta(days=1)
 
-    print(body)  # Para debug en logs
-    send_email(subject, body)
+    try:
+        body = build_report_for_date(report_date)
+        subject = f"Informe diario de viento - {report_date.strftime('%Y-%m-%d')}"
+        send_email(subject, body)
+        print("✅ Informe enviado con éxito.")
+    except Exception as e:
+        print(f"❌ Error al generar o enviar el informe: {e}")
