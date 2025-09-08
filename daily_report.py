@@ -1,90 +1,99 @@
-import pandas as pd
 import os
+import pandas as pd
+from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime, timedelta
+import pytz
 
-# Variables de entorno (GitHub Secrets)
-CORREO_ORIGEN = os.environ["CORREO_ORIGEN"]
-CONTRASENA = os.environ["CONTRASENA"]
-DESTINATARIOS = os.environ["DESTINATARIOS"].split(",")
-
-# Directorio donde se guardan los CSV
-DATA_DIR = "data"
-
-# Función para leer y preparar CSV
+# ========================
+# 📂 Lectura de datos CSV
+# ========================
 def read_station_csv(path):
     df = pd.read_csv(path)
     if "timestamp" in df.columns:
-        # Convertir a datetime
-        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-        # Localizar timezone si no lo tiene
-        if df["timestamp"].dt.tz is None:
-            df["timestamp"] = df["timestamp"].dt.tz_localize("America/Santiago")
+        # Forzar conversión de timestamp a datetime con UTC
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+
+        # Eliminar filas inválidas
+        df = df.dropna(subset=["timestamp"])
+
+        # Convertir de UTC a horario de Chile
+        df["timestamp"] = df["timestamp"].dt.tz_convert("America/Santiago")
+
     return df
 
-# Función para generar el informe diario
+# ========================
+# 📊 Generación del reporte
+# ========================
 def build_report_for_date(report_date):
     report_lines = []
-    estaciones = {
-        "330021": "Pudahuel AMB",
-        "330114": "San Pablo DASA"
+    station_files = {
+        "330021": "data/330021.csv",
+        "330114": "data/330114.csv"
     }
 
-    for code, name in estaciones.items():
-        file_path = os.path.join(DATA_DIR, f"{code}.csv")
+    for station, file_path in station_files.items():
         if not os.path.exists(file_path):
-            report_lines.append(f"⚠️ No hay datos para la estación {name} ({code})\n")
+            report_lines.append(f"⚠️ No hay datos para la estación {station}.\n")
             continue
 
         df = read_station_csv(file_path)
 
-        # Filtrar datos del día solicitado
+        if df.empty:
+            report_lines.append(f"⚠️ Archivo vacío para estación {station}.\n")
+            continue
+
+        # Filtrar solo las filas del día solicitado
         df_day = df[df["timestamp"].dt.date == report_date.date()]
 
         if df_day.empty:
-            report_lines.append(f"⚠️ Sin registros para {name} ({code}) en {report_date.date()}\n")
+            report_lines.append(f"⚠️ Sin datos para la estación {station} el {report_date.date()}.\n")
             continue
 
-        # Agrupar por hora y calcular estadísticas
-        df_day["hour"] = df_day["timestamp"].dt.hour
-        stats = df_day.groupby("hour")["velocidad"].agg(["min", "max", "mean"])
+        # Calcular métricas básicas
+        max_wind = df_day["wind_speed"].max()
+        avg_wind = df_day["wind_speed"].mean()
+        last_record = df_day.iloc[-1]
 
-        report_lines.append(f"📊 Informe {name} ({code}) - {report_date.date()}")
-        report_lines.append(stats.to_string())
-        report_lines.append("")
+        report_lines.append(
+            f"📍 Estación {station} ({report_date.date()}):\n"
+            f"- Velocidad máxima: {max_wind:.1f} km/h\n"
+            f"- Velocidad promedio: {avg_wind:.1f} km/h\n"
+            f"- Último registro: {last_record['wind_speed']:.1f} km/h "
+            f"a las {last_record['timestamp'].strftime('%H:%M')}\n"
+        )
 
     return "\n".join(report_lines)
 
-# Función para enviar correo
-def enviar_informe_por_correo(asunto, cuerpo):
-    try:
-        mensaje = MIMEMultipart()
-        mensaje["From"] = CORREO_ORIGEN
-        mensaje["To"] = ", ".join(DESTINATARIOS)
-        mensaje["Subject"] = asunto
-        mensaje.attach(MIMEText(cuerpo, "plain"))
+# ========================
+# 📧 Envío de correo
+# ========================
+def send_email(subject, body):
+    correo_origen = os.environ["CORREO_ORIGEN"]
+    contrasena = os.environ["CONTRASENA"]
+    destinatario = os.environ["DESTINATARIO"]
 
-        servidor = smtplib.SMTP("smtp.gmail.com", 587)
-        servidor.starttls()
-        servidor.login(CORREO_ORIGEN, CONTRASENA)
-        servidor.sendmail(CORREO_ORIGEN, DESTINATARIOS, mensaje.as_string())
-        servidor.quit()
+    msg = MIMEMultipart()
+    msg["From"] = correo_origen
+    msg["To"] = destinatario
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
 
-        print(f"✅ Informe enviado a {', '.join(DESTINATARIOS)}")
-    except Exception as e:
-        print(f"❌ Error al enviar informe: {e}")
+    with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        server.starttls()
+        server.login(correo_origen, contrasena)
+        server.send_message(msg)
 
-# Ejecución principal
+# ========================
+# 🚀 Main
+# ========================
 if __name__ == "__main__":
-    report_date = datetime.now() - timedelta(days=1)  # Informe del día anterior
-    body = build_report_for_date(report_date)
+    chile_tz = pytz.timezone("America/Santiago")
+    report_date = datetime.now(chile_tz) - timedelta(days=1)
 
-    if body.strip():
-        enviar_informe_por_correo(
-            f"📌 Informe diario de viento - {report_date.date()}",
-            body
-        )
-    else:
-        print("⚠️ No se generó contenido para el informe.")
+    body = build_report_for_date(report_date)
+    subject = f"Informe diario de viento - {report_date.strftime('%Y-%m-%d')}"
+
+    send_email(subject, body)
+    print("✅ Informe enviado correctamente.")
