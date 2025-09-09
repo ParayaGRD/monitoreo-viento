@@ -48,7 +48,8 @@ def read_station_csv(file_path):
 
 
 def build_report_for_date(date):
-    files = ["330021.csv", "330114.csv"]
+    # Buscar archivos dentro de la carpeta data/
+    files = ["data/330021.csv", "data/330114.csv"]
     report_lines = []
     date_str = date.strftime("%Y-%m-%d")
 
