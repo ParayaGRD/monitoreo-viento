@@ -3,6 +3,7 @@ import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 import pandas as pd
+import pytz
 
 # =========================
 # Configuración de correo
@@ -10,6 +11,9 @@ import pandas as pd
 CORREO_ORIGEN = os.environ["CORREO_ORIGEN"]
 CONTRASENA = os.environ["CONTRASENA"]
 DESTINATARIO = os.environ["DESTINATARIO"]
+
+# Zona horaria Chile
+TZ_SANTIAGO = pytz.timezone("America/Santiago")
 
 # =========================
 # Funciones auxiliares
@@ -21,7 +25,6 @@ def read_station_csv(file_path):
     # Normalizar nombres de columnas
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # Verificar columna timestamp
     if "timestamp" not in df.columns:
         raise ValueError(f"El archivo {file_path} no tiene columna 'timestamp'.")
 
@@ -35,7 +38,6 @@ def read_station_csv(file_path):
     if wind_col is None:
         raise ValueError(f"No se encontró columna de viento en {file_path}. Columnas detectadas: {df.columns.tolist()}")
 
-    # Renombrar a wind_speed para trabajar uniforme
     df.rename(columns={wind_col: "wind_speed"}, inplace=True)
 
     # Convertir timestamp a datetime con UTC
@@ -48,10 +50,13 @@ def read_station_csv(file_path):
 
 
 def build_report_for_date(date):
-    # Buscar archivos dentro de la carpeta data/
     files = ["data/330021.csv", "data/330114.csv"]
     report_lines = []
     date_str = date.strftime("%Y-%m-%d")
+    date_display = date.strftime("%d/%m/%Y")
+
+    # Encabezado del reporte
+    report_lines.append(f"📌 Reporte Velocidad de Viento - {date_display}\n")
 
     for file in files:
         if not os.path.exists(file):
@@ -59,8 +64,6 @@ def build_report_for_date(date):
             continue
 
         df = read_station_csv(file)
-
-        # Filtrar solo filas del día solicitado
         df_day = df[df["timestamp"].dt.date == date.date()]
 
         if df_day.empty:
@@ -70,11 +73,22 @@ def build_report_for_date(date):
         max_wind = df_day["wind_speed"].max()
         mean_wind = df_day["wind_speed"].mean()
 
+        # Bloque resumen
         report_lines.append(
             f"📊 {file} - {date_str}\n"
             f"• Velocidad máxima: {max_wind:.1f} kt\n"
             f"• Velocidad promedio: {mean_wind:.1f} kt\n"
         )
+
+        # Últimos 12 registros con hora local
+        df_last = df.tail(12).copy()
+        df_last["timestamp"] = df_last["timestamp"].dt.tz_convert(TZ_SANTIAGO)
+        df_last["timestamp"] = df_last["timestamp"].dt.strftime("%Y-%m-%d %H:%M")
+
+        report_lines.append(f"📄 Últimos 12 registros {os.path.basename(file).replace('.csv','')}:")
+        for _, row in df_last.iterrows():
+            report_lines.append(f"{row['timestamp']} - {row['wind_speed']} kt")
+        report_lines.append("")  # línea en blanco
 
     return "\n".join(report_lines)
 
@@ -94,8 +108,7 @@ def send_email(subject, body):
 # Script principal
 # =========================
 if __name__ == "__main__":
-    # Reporte del día anterior
-    report_date = datetime.now() - timedelta(days=1)
+    report_date = datetime.now(TZ_SANTIAGO) - timedelta(days=1)
 
     try:
         body = build_report_for_date(report_date)
