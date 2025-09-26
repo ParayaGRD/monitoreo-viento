@@ -13,7 +13,7 @@ Este repositorio contiene un sistema de **monitoreo de velocidad del viento** pa
 - `330021.py` → Script que monitorea la estación 330021.  
 - `330114.py` → Script que monitorea la estación 330114.  
 - `daily_report.py` → Script que genera y envía el informe diario consolidado.  
-- `.github/workflows/monitoreo.yml` → Workflow que ejecuta ambos scripts cada 5 minutos (monitoreo en tiempo real).  
+- `.github/workflows/monitoreo.yml` → Workflow que ejecuta ambos scripts cada 10 minutos (monitoreo en tiempo real).  
 - `.github/workflows/daily_report.yml` → Workflow que ejecuta el informe diario automáticamente una vez al día (08:00–09:00 hora de Santiago, UTC−4/UTC−3 según horario).  
 
 ---
