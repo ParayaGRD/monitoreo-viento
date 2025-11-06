@@ -2,8 +2,8 @@ name: Monitoreo Automático y Manual
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # Ejecuta cada 10 minutos
-  workflow_dispatch:          # Permite ejecución manual desde GitHub
+    - cron: "*/10 * * * *"   # Ejecuta cada 10 minutos (UTC)
+  workflow_dispatch:          # Permite ejecución manual desde GitHub Actions
 
 permissions:
   contents: write
@@ -27,19 +27,40 @@ jobs:
       - name: ⚙️ Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt || true
+          pip install requests beautifulsoup4
 
-      - name: 🚀 Ejecutar script de monitoreo
+      - name: 🚀 Ejecutar script 330021.py
+        env:
+          CORREO_ORIGEN: ${{ secrets.CORREO_ORIGEN }}
+          CONTRASENA: ${{ secrets.CONTRASENA }}
+          DESTINATARIOS: ${{ secrets.DESTINATARIOS }}
         run: |
-          python scripts/monitoreo.py
+          echo "Ejecutando 330021.py..."
+          python 330021.py
 
-      - name: 🗂️ Crear Pull Request automático
+      - name: 🚀 Ejecutar script 330114.py
+        env:
+          CORREO_ORIGEN: ${{ secrets.CORREO_ORIGEN }}
+          CONTRASENA: ${{ secrets.CONTRASENA }}
+          DESTINATARIOS: ${{ secrets.DESTINATARIOS }}
+        run: |
+          echo "Ejecutando 330114.py..."
+          python 330114.py
+
+      - name: 🗂️ Mostrar archivos data (debug)
+        run: |
+          echo "Contenido de data/:"
+          ls -la data || echo "No existe carpeta data"
+          echo "Últimas líneas de CSVs (si existen):"
+          if [ -f data/330021.csv ]; then tail -n 5 data/330021.csv; else echo "330021.csv no existe"; fi
+          if [ -f data/330114.csv ]; then tail -n 5 data/330114.csv; else echo "330114.csv no existe"; fi
+
+      - name: 📨 Crear Pull Request automático
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: "auto/monitoreo"
-          title: "Actualización automática de monitoreo"
-          body: "Este PR fue generado automáticamente por el flujo de monitoreo."
-          commit-message: "Actualización de datos automáticos"
-          labels: "automático, monitoreo"
+          commit-message: "Automated: add/update measurement CSVs"
+          title: "Actualización automática de mediciones"
+          body: "Este PR fue generado automáticamente por GitHub Actions con los nuevos datos de monitoreo."
+          branch: "auto/update-measurements"
           delete-branch: true
