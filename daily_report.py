@@ -85,7 +85,7 @@ def build_report_for_date(date):
         df_last["timestamp"] = df_last["timestamp"].dt.tz_convert(TZ_SANTIAGO)
         df_last["timestamp"] = df_last["timestamp"].dt.strftime("%Y-%m-%d %H:%M")
 
-        report_lines.append(f"📄 Últimos 12 registros {os.path.basename(file).replace('.csv','')}:")
+        report_lines.append(f"📄 Últimos 24 registros {os.path.basename(file).replace('.csv','')}:")
         for _, row in df_last.iterrows():
             report_lines.append(f"{row['timestamp']} - {row['wind_speed']} kt")
         report_lines.append("")  # línea en blanco
