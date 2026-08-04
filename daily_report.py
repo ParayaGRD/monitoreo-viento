@@ -80,8 +80,8 @@ def build_report_for_date(date):
             f"• Velocidad promedio: {mean_wind:.1f} kt\n"
         )
 
-        # Últimos 12 registros con hora local
-        df_last = df.tail(12).copy()
+        # Últimos 24 registros con hora local
+        df_last = df.tail(24).copy()
         df_last["timestamp"] = df_last["timestamp"].dt.tz_convert(TZ_SANTIAGO)
         df_last["timestamp"] = df_last["timestamp"].dt.strftime("%Y-%m-%d %H:%M")
 
