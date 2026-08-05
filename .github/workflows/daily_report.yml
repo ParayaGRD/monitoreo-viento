@@ -28,5 +28,5 @@ jobs:
         env:
           CORREO_ORIGEN: ${{ secrets.CORREO_ORIGEN }}
           CONTRASENA: ${{ secrets.CONTRASENA }}
-          DESTINATARIO: ${{ secrets.DESTINATARIOS }}
+          DESTINATARIO: ${{ secrets.DESTINATARIO }}
         run: python daily_report.py
