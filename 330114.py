@@ -18,10 +18,11 @@ def obtener_destinatarios():
     raw = os.environ.get("DESTINATARIOS") or os.environ.get("DESTINATARIO")
     if not raw:
         raise RuntimeError("No se encontró DESTINATARIOS ni DESTINATARIO")
-    parts = [p.strip() for p in raw.replace(";", ",").split(",") if p.strip()]
+    parts = [p.strip() for p in re.split(r"[,;\n]+", raw) if p.strip()]
     return parts
 
 DESTINATARIOS = obtener_destinatarios()
+print(DESTINATARIOS)
 
 def obtener_velocidad_viento():
     try:
